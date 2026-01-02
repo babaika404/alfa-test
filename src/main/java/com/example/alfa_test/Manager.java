@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cms.CMSProcessable;
 import org.bouncycastle.cms.CMSProcessableByteArray;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.CMSSignedDataGenerator;
@@ -53,6 +54,10 @@ public class Manager {
     @PostConstruct
     public void init() throws Exception {
 
+        if (java.security.Security.getProvider("BC") == null) {
+            java.security.Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+        }
+        
         log.info("key init");
 
         KeyStore ks = KeyStore.getInstance("PKCS12");
@@ -64,9 +69,9 @@ public class Manager {
         this.pubkey = cert.getPublicKey();
     }
 
-    public String signData(String data) throws Exception {
+    public String signData(String data, boolean detached) throws Exception {
 
-        log.info("start sign");
+        log.info("start sign detached: ", detached);
 
         List<X509Certificate> certList = new ArrayList<>();
         certList.add(cert);
@@ -82,32 +87,45 @@ public class Manager {
                 .build(sha256Signer, cert));
         gen.addCertificates(certs);
 
-        CMSSignedData sigData = gen.generate(msg, true);
+        CMSSignedData sigData = gen.generate(msg, !detached);
         return Base64.getEncoder().encodeToString(sigData.getEncoded());
     }
 
-    public VerifyResponse verifyData(String sign64) throws Exception {
+    public VerifyResponse verifyData(String sign64, String data) throws Exception {
 
         log.info(" start verify");
 
         byte[] signB = Base64.getDecoder().decode(sign64);
-        CMSSignedData signdata = new CMSSignedData(signB);
+        CMSSignedData signData;
 
-        SignerInformationStore signers = signdata.getSignerInfos();
+        if (data != null && !data.isEmpty()) {
+            CMSProcessable content = new CMSProcessableByteArray(data.getBytes());
+            signData = new CMSSignedData(content, signB);
+            log.info("detached");
+        } else {
+            signData = new CMSSignedData(signB);
+            log.info("attached ");
+        }
+        SignerInformationStore signers = signData.getSignerInfos();
         Collection<SignerInformation> c = signers.getSigners();
         SignerInformation signer = c.iterator().next();
 
-        X509CertificateHolder certHolder = (X509CertificateHolder) ((org.bouncycastle.util.Store) signdata.getCertificates())
+        X509CertificateHolder certHolder = (X509CertificateHolder) ((org.bouncycastle.util.Store) signData.getCertificates())
                 .getMatches(signer.getSID())
                 .iterator().next();
 
-        X509Certificate verifyCert = new JcaX509CertificateConverter()
-                .setProvider("BC").getCertificate(certHolder);
+        X509Certificate verifierCert = new JcaX509CertificateConverter()
+                .setProvider("BC")
+                .getCertificate(certHolder);
 
-        boolean isValid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(verifyCert));
-        String originalContent = new String((byte[]) signdata.getSignedContent().getContent());
+        boolean isValid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(verifierCert));
 
-        return new VerifyResponse(isValid, originalContent, verifyCert.getSubjectDN().getName());
+        String contentStr = (data != null) ? data : "Data inside signature";
+        if (signData.getSignedContent() != null) {
+            contentStr = new String((byte[]) signData.getSignedContent().getContent());
+        }
+
+        return new VerifyResponse(isValid, contentStr, verifierCert.getSubjectDN().getName());
     }
 
     public EncResponse encryptData(String pt) throws Exception {
