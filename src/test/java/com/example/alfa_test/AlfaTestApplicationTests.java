@@ -63,15 +63,15 @@ class AlfaTestApplicationTests {
         VerifyResponse response = objectMapper.readValue(verifyResult.getResponse().getContentAsString(), VerifyResponse.class);
         
         assertTrue(response.isValid(), "invalid sign");
-        assertEquals(data, response.getData());
+        assertEquals(data, response.getOrigData());
     }
 
     @Test
     @DisplayName("test detached sign")
     void testDetachedSign() throws Exception {
-        String originalData = "babaika";
+        String origData = "babaika";
 
-        SignRequest signReq = new SignRequest(originalData, true);
+        SignRequest signReq = new SignRequest(origData, true);
         MvcResult signResult = mockMvc.perform(post("/api/sign")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signReq)))
@@ -80,7 +80,7 @@ class AlfaTestApplicationTests {
         String signatureBase64 = objectMapper.readTree(signResult.getResponse().getContentAsString())
                 .get("signature").asText();
 
-        VerifyRequest verifyReq = new VerifyRequest(signatureBase64, originalData);
+        VerifyRequest verifyReq = new VerifyRequest(signatureBase64, origData);
         MvcResult verifyResult = mockMvc.perform(post("/api/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(verifyReq)))

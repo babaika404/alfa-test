@@ -3,21 +3,26 @@ package com.example.alfa_test;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
-import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.cms.Attribute;
+import org.bouncycastle.asn1.cms.AttributeTable;
+
 import org.bouncycastle.cert.jcajce.JcaCertStore;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
-import org.bouncycastle.cms.CMSProcessable;
+
+import org.bouncycastle.cms.DefaultSignedAttributeTableGenerator;
 import org.bouncycastle.cms.CMSProcessableByteArray;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.CMSSignedDataGenerator;
 import org.bouncycastle.cms.CMSTypedData;
 import org.bouncycastle.cms.SignerInformation;
-import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
+
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -27,19 +32,15 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collection;
-import java.util.List;
+import java.util.HexFormat;
 
 @Slf4j
 @Service
 public class Manager {
-
-    // можно по рофлу ебануть гост россия z
-    // хзхз костыли 
 
     @Value("${app.ks.password}")
     private String kspass;
@@ -69,64 +70,94 @@ public class Manager {
         this.pubkey = cert.getPublicKey();
     }
 
-    public String signData(String data, boolean detached) throws Exception {
+    private byte[] prepareData(String input) {
+        if (input == null || input.trim().isEmpty()) return new byte[0];
 
+        String clean = input.trim().replace("\"", "").replaceAll("\\s", "");
+
+        try {
+            if (clean.length() % 4 == 0 && clean.matches("^[a-zA-Z0-9+/]*={0,2}$")) {
+                return Base64.getDecoder().decode(clean);
+            }
+        } catch (Exception e) {}
+
+        return input.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public String signData(String data, boolean detached, String extension) throws Exception {
         log.info("start sign detached: ", detached);
 
-        List<X509Certificate> certList = new ArrayList<>();
-        certList.add(cert);
-        JcaCertStore certs = new JcaCertStore(certList);
+        byte[] signB = prepareData(data);
+        
+        org.bouncycastle.asn1.ASN1ObjectIdentifier extOID = new org.bouncycastle.asn1.ASN1ObjectIdentifier("1.2.840.113549.1.9.16.2.55");
+        org.bouncycastle.asn1.cms.Attribute extAttr = new org.bouncycastle.asn1.cms.Attribute(
+                extOID, 
+                new org.bouncycastle.asn1.DERSet(new org.bouncycastle.asn1.DERPrintableString(extension))
+        );
+        
+        java.util.Hashtable<org.bouncycastle.asn1.ASN1ObjectIdentifier, org.bouncycastle.asn1.cms.Attribute> attrs = new java.util.Hashtable<>();
+        attrs.put(extOID, extAttr);
+        org.bouncycastle.asn1.cms.AttributeTable myAttrTable = new org.bouncycastle.asn1.cms.AttributeTable(attrs);
 
-        CMSTypedData msg = new CMSProcessableByteArray(data.getBytes());
-        ContentSigner sha256Signer = new JcaContentSignerBuilder("SHA256withRSA")
+        ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA")
                 .setProvider("BC").build(privkey);
 
         CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
+        
         gen.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(
                 new JcaDigestCalculatorProviderBuilder().setProvider("BC").build())
-                .build(sha256Signer, cert));
-        gen.addCertificates(certs);
+                .setSignedAttributeGenerator(new DefaultSignedAttributeTableGenerator(myAttrTable))
+                .build(signer, cert));
+        
+        gen.addCertificates(new JcaCertStore(java.util.Collections.singletonList(cert)));
 
-        CMSSignedData sigData = gen.generate(msg, !detached);
+        CMSTypedData msg = new CMSProcessableByteArray(signB);
+        CMSSignedData sigData = gen.generate(msg, !detached); 
+        
         return Base64.getEncoder().encodeToString(sigData.getEncoded());
     }
 
-    public VerifyResponse verifyData(String sign64, String data) throws Exception {
+    public VerifyResponse verifyData(String sign64, String origData) throws Exception {
+        log.info("start verify");
+        
+        byte[] signB = Base64.getDecoder().decode(sign64.trim().replace("\"", "").replaceAll("\\s", ""));
+        CMSSignedData sigData;
 
-        log.info(" start verify");
-
-        byte[] signB = Base64.getDecoder().decode(sign64);
-        CMSSignedData signData;
-
-        if (data != null && !data.isEmpty()) {
-            CMSProcessable content = new CMSProcessableByteArray(data.getBytes());
-            signData = new CMSSignedData(content, signB);
+        if (origData != null && !origData.trim().isEmpty()) {
             log.info("detached");
+            byte[] origB = prepareData(origData);
+            sigData = new CMSSignedData(new CMSProcessableByteArray(origB), signB);
         } else {
-            signData = new CMSSignedData(signB);
-            log.info("attached ");
-        }
-        SignerInformationStore signers = signData.getSignerInfos();
-        Collection<SignerInformation> c = signers.getSigners();
-        SignerInformation signer = c.iterator().next();
-
-        X509CertificateHolder certHolder = (X509CertificateHolder) ((org.bouncycastle.util.Store) signData.getCertificates())
-                .getMatches(signer.getSID())
-                .iterator().next();
-
-        X509Certificate verifierCert = new JcaX509CertificateConverter()
-                .setProvider("BC")
-                .getCertificate(certHolder);
-
-        boolean isValid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(verifierCert));
-
-        String contentStr = (data != null) ? data : "Data inside signature";
-        if (signData.getSignedContent() != null) {
-            contentStr = new String((byte[]) signData.getSignedContent().getContent());
+            log.info("attached");
+            sigData = new CMSSignedData(signB);
         }
 
-        return new VerifyResponse(isValid, contentStr, verifierCert.getSubjectDN().getName());
+        SignerInformation signer = sigData.getSignerInfos().getSigners().iterator().next();
+        
+        var certMatches = sigData.getCertificates().getMatches(signer.getSID());
+        org.bouncycastle.cert.X509CertificateHolder certHolder = (org.bouncycastle.cert.X509CertificateHolder) certMatches.iterator().next();
+        X509Certificate verCert = new JcaX509CertificateConverter().setProvider("BC").getCertificate(certHolder);
+
+        boolean isValid = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider("BC").build(verCert));
+
+        String detectedExt = ".bin";
+        AttributeTable attrTable = signer.getSignedAttributes();
+        if (attrTable != null) {
+            Attribute attr = attrTable.get(new ASN1ObjectIdentifier("1.2.840.113549.1.9.16.2.55"));
+            if (attr != null) detectedExt = attr.getAttributeValues()[0].toString();
+        }
+
+        String res64 = "";
+        if (sigData.getSignedContent() != null) {
+            res64 = Base64.getEncoder().encodeToString((byte[]) sigData.getSignedContent().getContent());
+        } else {
+            res64 = (origData != null) ? origData.trim().replace("\"", "").replaceAll("\\s", "") : "";
+        }
+
+        log.info("end verify status", isValid);
+        return new VerifyResponse(isValid, res64, verCert.getSubjectDN().getName(), detectedExt);
     }
+
 
     public EncResponse encryptData(String pt) throws Exception {
         
@@ -177,5 +208,15 @@ public class Manager {
         byte[] data = cipherAES.doFinal(ct);
 
         return new String(data);
+    }
+
+    public String hashData(String input) throws Exception {
+        
+        log.info("hash");
+
+        byte[] normInput = prepareData(input);
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte[] hashB = digest.digest(normInput);
+        return HexFormat.of().formatHex(hashB);
     }
 }

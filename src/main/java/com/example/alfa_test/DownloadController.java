@@ -20,7 +20,6 @@ public class DownloadController {
             
             if (!url.startsWith("https://")) {
                 return "Error: https only";
-                // сделать нормально списиок доменов или я хз
             }
 
             return restClient.get().uri(url).retrieve().body(String.class);

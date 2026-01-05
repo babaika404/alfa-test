@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>super ultra crypto terminal 3000</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #F9F8F6;
+            --accent-color: #4D0011;
+            --text-color: #000000;
+            --border-color: #E2E2E2;
+            --secondary-text: #8E8E8E;
+        }
+
+        * { box-sizing: border-box; }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: 'Inter', sans-serif; margin: 0; display: flex; justify-content: center; min-height: 100vh; }
+
+        .main-terminal { width: 100%; max-width: 1000px; padding: 60px 40px; display: flex; flex-direction: column; }
+
+        header { border-bottom: 2px solid var(--text-color); padding-bottom: 20px; margin-bottom: 50px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .logo { font-weight: 800; font-size: 2.5rem; letter-spacing: -2px; text-transform: uppercase; }
+        .developer { font-size: 0.7rem; font-weight: 600; letter-spacing: 2px; color: var(--accent-color); margin-bottom: 8px; }
+
+        nav { display: flex; gap: 40px; margin-bottom: 50px; }
+        .nav-link { background: none; border: none; padding: 0; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; color: var(--secondary-text); cursor: pointer; transition: 0.3s; display: flex; align-items: center; gap: 10px; }
+        .nav-link span { font-size: 0.6rem; color: var(--accent-color); }
+        .nav-link.active { color: var(--text-color); }
+        .nav-link.active::before { content: "●"; font-size: 0.5rem; color: var(--accent-color); margin-right: -5px; }
+
+        .content-section { display: none; }
+        .content-section.active { display: grid; grid-template-columns: 1fr 300px; column-gap: 40px; row-gap: 15px; animation: slideUp 0.4s ease forwards; }
+
+        .input-label { grid-column: 1 / span 2; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--secondary-text); }
+        .input-block { grid-column: 1; }
+
+        textarea, input[type="text"] { width: 100%; background: none; border: 1px solid var(--border-color); padding: 18px; font-size: 0.9rem; font-family: inherit; outline: none; margin-bottom: 10px; }
+        textarea:focus, input[type="text"]:focus { border-color: var(--text-color); background: #fff; }
+
+        .actions { grid-column: 2; display: flex; flex-direction: column; gap: 10px; align-self: start; }
+        .main-btn { background: var(--accent-color); color: #fff; border: none; padding: 19px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: 0.3s; }
+        .main-btn:hover { letter-spacing: 4px; background: var(--text-color); }
+        .ghost-btn { background: none; border: 1px solid var(--text-color); color: var(--text-color); padding: 14px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+
+        .terminal-output { margin-top: 35px; border-top: 1px solid var(--border-color); padding-top: 25px; }
+        .output-label { font-size: 0.65rem; font-weight: 700; color: var(--secondary-text); text-transform: uppercase; margin-bottom: 12px; display: flex; justify-content: space-between; }
+        
+        /* #result { font-family: inherit; outline: none; margin-bottom: 10px; } */
+        #result { font-family: inherit; font-size: 0.9rem; line-height: 1.6; color: var(--text-color); background: #fff; padding: 25px; border: 1px solid var(--border-color); word-break: break-all; white-space: pre-wrap; min-height: 80px; }
+        .hidden { display: none; }
+        .download-link { color: var(--accent-color); text-decoration: underline; cursor: pointer; font-size: 0.7rem; text-transform: uppercase; font-weight: 800; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div class="main-terminal">
+    <header>
+        <div class="logo">MEGA CRYPTO TERMINAL 3000</div>
+        <div class="developer">by babaika</div>
+    </header>
+
+    <nav>
+        <button class="nav-link active" onclick="switchTab('hash')"><span>01</span> Hash</button>
+        <button class="nav-link" onclick="switchTab('sign')"><span>02</span> Signature</button>
+        <button class="nav-link" onclick="switchTab('encrypt')"><span>03</span> Encryption</button>
+        <button class="nav-link" onclick="switchTab('download')"><span>04</span> Resource</button>
+    </nav>
+
+    <!-- hash sec -->
+    <div id="hash" class="content-section active">
+        <div class="input-label">data</div>
+        <div class="input-block">
+            <input type="text" id="hashInput" placeholder="Enter text or upload file...">
+            <input type="file" onchange="readFile64(this, 'hashInput')">
+        </div>
+        <div class="actions"><button class="main-btn" onclick="apiCall('/api/hash', 'hashInput', 'data')">hash</button></div>
+    </div>
+
+    <!-- sign sec -->
+    <div id="sign" class="content-section">
+        <div class="input-label">signature / data</div>
+        <div class="input-block">
+            <textarea id="signData" rows="4" placeholder="Enter text / base64 / signature or upload file..."></textarea>
+            <input type="file" onchange="readFile64(this, 'signData')">
+            
+            <div style="margin-top: 15px;">
+                <label style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; cursor: pointer;">
+                    <input type="checkbox" id="detachedMode" onchange="toggleDetached()"> detached mode
+                </label>
+            </div>
+
+            <div id="detachedBlock" class="hidden" style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                <div class="input-label">Original document (for detached mode only)</div>
+                <textarea id="origData" rows="3" placeholder="Original content..."></textarea>
+                <input type="file" onchange="readFile64(this, 'origData')" style="margin-top: 10px;">
+            </div>
+        </div>
+        <div class="actions">
+            <button class="main-btn" onclick="performSign()">sign PKCS#7</button>
+            <button class="ghost-btn" onclick="performVerify()">verify</button>
+        </div>
+    </div>
+
+    <!-- enc sec -->
+    <div id="encrypt" class="content-section">
+        <div class="input-label">plaintext / ciphertext</div>
+        <div class="input-block">
+            <textarea id="cryptoData" rows="6" placeholder="Enter text or upload file..."></textarea>
+            <input type="file" onchange="readFile64(this, 'cryptoData')">
+        </div>
+        <div class="actions">
+            <button class="main-btn" onclick="performEncrypt()">encrypt</button>
+            <button class="ghost-btn" onclick="performDecrypt()">decrypt</button>
+        </div>
+    </div>
+
+    <!-- daun -->
+    <div id="download" class="content-section">
+        <div class="input-label">remote URL</div>
+        <div class="input-block"><input type="text" id="urlInput" placeholder="https://"></div>
+        <div class="actions"><button class="main-btn" onclick="performDownload()">download</button></div>
+    </div>
+
+    <div class="terminal-output">
+        <div class="output-label">
+            <span>output</span>
+            <span id="downloadBtn" class="download-link hidden" onclick="downloadFile()">Download as file</span>
+        </div>
+        <div id="result">awaiting action...</div>
+    </div>
+</div>
+
+<script>
+
+    let lastRawRes = null; 
+    let lastRes = 'bin'; 
+    let servExt = null; 
+    let origExt = '.txt'; 
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+    }
+
+    function toggleDetached() {
+        document.getElementById('detachedBlock').classList.toggle('hidden', !document.getElementById('detachedMode').checked);
+    }
+
+    document.getElementById('signData').addEventListener('input', () => {
+        origExt = '.txt';
+    });
+
+    function log(data, type = 'bin') {
+        const resDiv = document.getElementById('result');
+        const dlBtn = document.getElementById('downloadBtn');
+        
+        if (typeof data === 'object') {
+            resDiv.innerText = JSON.stringify(data, null, 4);
+            lastRawRes = data.signature || data.origData || data.data || null;
+            servExt = data.extension || null;
+        } else {
+            resDiv.innerText = data;
+            lastRawRes = data.length > 50 ? data : null; 
+            servExt = null;
+        }
+
+        lastRes = type;
+        dlBtn.classList.toggle('hidden', !lastRawRes);
+    }
+
+    function readFile64(input, targetId) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const fileName = file.name;
+
+        origExt = fileName.substring(fileName.lastIndexOf('.'));
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result.split(',')[1];
+            document.getElementById(targetId).value = base64;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function downloadFile() {
+        if (!lastRawRes) return;
+        try {
+            let clean64 = lastRawRes.trim().replace(/\s/g, '').replace(/^"|"$/g, '');
+            const binStr = atob(clean64);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) {
+                bytes[i] = binStr.charCodeAt(i);
+            }
+            
+            const blob = new Blob([bytes], {type: "application/octet-stream"});
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+
+            if (lastRes === 'p7s') {
+                a.download = "signature.p7s";
+            } else {
+                let ext = servExt || origExt || '.bin';
+                a.download = "restored_file" + ext;
+            }
+
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (e) { alert("Error with file"); }
+    }
+
+    async function apiCall(url, inputId, field) {
+        const val = document.getElementById(inputId).value;
+        const body = {}; body[field] = val;
+        const r = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        log(await r.json(), 'txt');
+    }
+
+    async function performSign() {
+        const dataVal = document.getElementById('signData').value;
+        const isDetached = document.getElementById('detachedMode').checked;
+        
+        try {
+            const r = await fetch('/api/sign', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    origData: dataVal, 
+                    detached: isDetached, 
+                    extension: origExt 
+                })
+            });
+            log(await r.json(), 'p7s');
+        } catch(e) { log("Error: " + e.message, true); }
+    }
+
+    async function performVerify() {
+        const sig = document.getElementById('signData').value;
+        const orig = document.getElementById('origData').value;
+        try {
+            const r = await fetch('/api/verify', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ signature: sig, origData: orig })
+            });
+            log(await r.json(), 'verify'); 
+        } catch(e) { log("Error: " + e.message, true); }
+    }
+
+    async function performEncrypt() {
+        const val = document.getElementById('cryptoData').value;
+        const r = await fetch('/api/encrypt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ data: val })});
+        window.stored = await r.json();
+        log(window.stored, 'bin');
+    }
+
+    async function performDecrypt() {
+        if(!window.stored) return alert("Нет данных");
+        const r = await fetch('/api/decrypt', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(window.stored)});
+        const res = await r.text();
+        log(res, 'bin'); 
+    }
+
+    async function performDownload() {
+        const r = await fetch(`/api/download?url=${encodeURIComponent(document.getElementById('urlInput').value)}`);
+        log(await r.text(), 'txt');
+    }
+</script>
+
+</body>
+</html>

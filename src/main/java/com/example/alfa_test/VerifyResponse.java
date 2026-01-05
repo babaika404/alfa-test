@@ -8,7 +8,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class VerifyResponse {
-    private boolean valid;  
-    private String data;    
-    private String signer;  
+    private boolean valid;
+    private String origData;
+    private String signer;
+    private String extension; 
 }

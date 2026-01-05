@@ -9,5 +9,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class VerifyRequest {
     private String signature; 
-    private String data;
+    private String origData;
 }

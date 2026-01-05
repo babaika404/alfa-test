@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SignRequest {
-    private String data; 
+    private String origData;
     private boolean detached;
+    private String extension; 
 }
