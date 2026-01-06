@@ -29,8 +29,8 @@ import org.springframework.stereotype.Service;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.spec.GCMParameterSpec;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
@@ -42,11 +42,14 @@ import java.util.HexFormat;
 @Service
 public class Manager {
 
-    @Value("${app.ks.password}")
+    @Value("${app.ks.pswd}")
     private String kspass;
 
-    @Value("${app.ks.alias}")
+    @Value("${app.ks.alias}")    
     private String ksalias;
+
+    @Value("${app.ks.path}")     
+    private String kspath;
 
     private PrivateKey privkey;
     private PublicKey pubkey;
@@ -62,9 +65,10 @@ public class Manager {
         log.info("key init");
 
         KeyStore ks = KeyStore.getInstance("PKCS12");
-        try (InputStream is = getClass().getResourceAsStream("/keystore.p12")) {
+        try (InputStream is = java.nio.file.Files.newInputStream(java.nio.file.Paths.get(kspath))) {
             ks.load(is, kspass.toCharArray());
         }
+
         this.privkey = (PrivateKey) ks.getKey(ksalias, kspass.toCharArray());
         this.cert = (X509Certificate) ks.getCertificate(ksalias);
         this.pubkey = cert.getPublicKey();
@@ -75,11 +79,16 @@ public class Manager {
 
         String clean = input.trim().replace("\"", "").replaceAll("\\s", "");
 
-        try {
-            if (clean.length() % 4 == 0 && clean.matches("^[a-zA-Z0-9+/]*={0,2}$")) {
+        boolean is64 = clean.matches("^[a-zA-Z0-9+/]*={0,2}$") && (clean.length() % 4 == 0);
+        boolean isFile = clean.contains("=") || clean.length() > 64;
+
+        if (is64 && isFile) {
+            try {
                 return Base64.getDecoder().decode(clean);
+            } catch (Exception e) {
+                log.info("Failed to decode as b64");
             }
-        } catch (Exception e) {}
+        }
 
         return input.getBytes(StandardCharsets.UTF_8);
     }
@@ -154,7 +163,7 @@ public class Manager {
             res64 = (origData != null) ? origData.trim().replace("\"", "").replaceAll("\\s", "") : "";
         }
 
-        log.info("end verify status", isValid);
+        log.info("end verify status: {}", isValid);
         return new VerifyResponse(isValid, res64, verCert.getSubjectDN().getName(), detectedExt);
     }
 
@@ -167,17 +176,15 @@ public class Manager {
         keyGen.init(256);
         SecretKey aesKey = keyGen.generateKey();
 
-        byte[] iv = new byte[16];
-        SecureRandom secRand = new SecureRandom();
-        secRand.nextBytes(iv);
-        IvParameterSpec seciv = new IvParameterSpec(iv);
+        byte[] iv = new byte[12];
+        new SecureRandom().nextBytes(iv);        
+        GCMParameterSpec spec = new GCMParameterSpec(128, iv);
 
+        Cipher cipherAES = Cipher.getInstance("AES/GCM/NoPadding", "BC");
+        cipherAES.init(Cipher.ENCRYPT_MODE, aesKey, spec);
+        byte[] ct = cipherAES.doFinal(pt.getBytes(StandardCharsets.UTF_8));
 
-        Cipher cipherAES = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipherAES.init(Cipher.ENCRYPT_MODE, aesKey, seciv);
-        byte[] ct = cipherAES.doFinal(pt.getBytes());
-
-        Cipher cipherRSA = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        Cipher cipherRSA = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding", "BC");
         cipherRSA.init(Cipher.ENCRYPT_MODE, pubkey);
         byte[] ctkey = cipherRSA.doFinal(aesKey.getEncoded());
 
@@ -198,16 +205,17 @@ public class Manager {
         byte[] ctkey = Base64.getDecoder().decode(ctkeyB64);
         byte[] iv = Base64.getDecoder().decode(iv64);
 
-        Cipher cipherRSA = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        Cipher cipherRSA = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding", "BC");
         cipherRSA.init(Cipher.DECRYPT_MODE, privkey);
         byte[] keyB = cipherRSA.doFinal(ctkey);
-        SecretKey key = new SecretKeySpec(keyB, 0, keyB.length, "AES");
+        SecretKey key = new SecretKeySpec(keyB, "AES");
 
-        Cipher cipherAES = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipherAES.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
+        Cipher cipherAES = Cipher.getInstance("AES/GCM/NoPadding", "BC");
+        GCMParameterSpec spec = new GCMParameterSpec(128, iv);
+        cipherAES.init(Cipher.DECRYPT_MODE, key, spec);
         byte[] data = cipherAES.doFinal(ct);
 
-        return new String(data);
+        return new String(data, StandardCharsets.UTF_8);
     }
 
     public String hashData(String input) throws Exception {

@@ -130,7 +130,10 @@
     <div class="terminal-output">
         <div class="output-label">
             <span>output</span>
-            <span id="downloadBtn" class="download-link hidden" onclick="downloadFile()">Download as file</span>
+            <div>
+                <span id="useSigBtn" class="download-link hidden" onclick="copyToInput()" style="margin-right: 15px;">Use as input</span>
+                <span id="downloadBtn" class="download-link hidden" onclick="downloadFile()">Download as file</span>
+            </div>
         </div>
         <div id="result">awaiting action...</div>
     </div>
@@ -142,6 +145,13 @@
     let lastRes = 'bin'; 
     let servExt = null; 
     let origExt = '.txt'; 
+
+    function copyToInput() {
+        if (lastRawRes) {
+            const clean = lastRawRes.trim().replace(/^"|"$/g, '');
+            document.getElementById('signData').value = clean;
+        }
+    }
 
     function switchTab(tabId) {
         document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
@@ -161,6 +171,7 @@
     function log(data, type = 'bin') {
         const resDiv = document.getElementById('result');
         const dlBtn = document.getElementById('downloadBtn');
+        const useSigBtn = document.getElementById('useSigBtn');
         
         if (typeof data === 'object') {
             resDiv.innerText = JSON.stringify(data, null, 4);
@@ -174,6 +185,7 @@
 
         lastRes = type;
         dlBtn.classList.toggle('hidden', !lastRawRes);
+        if (useSigBtn) useSigBtn.classList.toggle('hidden', type !== 'p7s');
     }
 
     function readFile64(input, targetId) {
@@ -211,7 +223,7 @@
                 a.download = "signature.p7s";
             } else {
                 let ext = servExt || origExt || '.bin';
-                a.download = "restored_file" + ext;
+                a.download = "file" + ext;
             }
 
             a.click();

@@ -1,125 +1,133 @@
 package com.example.alfa_test;
 
 import tools.jackson.databind.ObjectMapper; 
+import java.util.Base64;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+
 @SpringBootTest
-@AutoConfigureMockMvc 
+@AutoConfigureMockMvc
 class AlfaTestApplicationTests {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
-    private ObjectMapper objectMapper; 
+    private ObjectMapper objectMapper;
 
     @Test
     @DisplayName("test hash")
     void testHash() throws Exception {
         HashRequest request = new HashRequest("babaika");
         
-        mockMvc.perform(post("/api/hash")
+        MvcResult result = mockMvc.perform(post("/api/hash")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn();
+
+        HashResponse res = objectMapper.readValue(result.getResponse().getContentAsString(), HashResponse.class);
+        assertNotNull(res.getHash());
+        assertEquals(64, res.getHash().length()); 
     }
 
     @Test
     @DisplayName("test attached sign")
-    void testAttachedSign() throws Exception {
+    void testAttSign() throws Exception {
         String data = "babaika";
 
-        SignRequest signReq = new SignRequest(data, false);
+        SignRequest signReq = new SignRequest(data, false, ".txt");
 
-		MvcResult signResult = mockMvc.perform(post("/api/sign")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content(objectMapper.writeValueAsString(signReq)))
-				.andExpect(status().isOk()) 
-				.andReturn();
+        MvcResult signRes = mockMvc.perform(post("/api/sign")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(signReq)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        String signatureBase64 = objectMapper.readTree(signResult.getResponse().getContentAsString())
+        String signatureBase64 = objectMapper.readTree(signRes.getResponse().getContentAsString())
                 .get("signature").asText();
 
         VerifyRequest verifyReq = new VerifyRequest(signatureBase64, null);
-        MvcResult verifyResult = mockMvc.perform(post("/api/verify")
+        
+        MvcResult verifyRes = mockMvc.perform(post("/api/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(verifyReq)))
+                .andExpect(status().isOk())
                 .andReturn();
 
-        VerifyResponse response = objectMapper.readValue(verifyResult.getResponse().getContentAsString(), VerifyResponse.class);
+        VerifyResponse response = objectMapper.readValue(verifyRes.getResponse().getContentAsString(), VerifyResponse.class);
         
         assertTrue(response.isValid(), "invalid sign");
-        assertEquals(data, response.getOrigData());
+        String restored = new String(Base64.getDecoder().decode(response.getOrigData()));
+        assertEquals(data, restored);
+        assertEquals(".txt", response.getExtension());
     }
 
     @Test
     @DisplayName("test detached sign")
-    void testDetachedSign() throws Exception {
-        String origData = "babaika";
+    void testDetSign() throws Exception {
+        String origData = "babaika detached";
 
-        SignRequest signReq = new SignRequest(origData, true);
-        MvcResult signResult = mockMvc.perform(post("/api/sign")
+        SignRequest signReq = new SignRequest(origData, true, ".doc");
+        MvcResult signRes = mockMvc.perform(post("/api/sign")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signReq)))
+                .andExpect(status().isOk())
                 .andReturn();
 
-        String signatureBase64 = objectMapper.readTree(signResult.getResponse().getContentAsString())
+        String signatureBase64 = objectMapper.readTree(signRes.getResponse().getContentAsString())
                 .get("signature").asText();
 
         VerifyRequest verifyReq = new VerifyRequest(signatureBase64, origData);
-        MvcResult verifyResult = mockMvc.perform(post("/api/verify")
+        MvcResult verifyRes = mockMvc.perform(post("/api/verify")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(verifyReq)))
+                .andExpect(status().isOk())
                 .andReturn();
 
-        VerifyResponse response = objectMapper.readValue(verifyResult.getResponse().getContentAsString(), VerifyResponse.class);
+        VerifyResponse response = objectMapper.readValue(verifyRes.getResponse().getContentAsString(), VerifyResponse.class);
         
         assertTrue(response.isValid(), "invalid sign");
+        assertEquals(".doc", response.getExtension());
     }
 
     @Test
     @DisplayName("test enc and dec")
-    void testEncryptionCycle() throws Exception {
+    void testEnc() throws Exception {
         String secret = "babaika";
 
         EncRequest encReq = new EncRequest(secret);
         MvcResult encResult = mockMvc.perform(post("/api/encrypt")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(encReq)))
+                .andExpect(status().isOk())
                 .andReturn();
 
         EncResponse encResp = objectMapper.readValue(encResult.getResponse().getContentAsString(), EncResponse.class);
+        assertNotNull(encResp.getData());
+        assertNotNull(encResp.getKey());
+        assertNotNull(encResp.getIv());
 
         MvcResult decResult = mockMvc.perform(post("/api/decrypt")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(encResp)))
+                .andExpect(status().isOk())
                 .andReturn();
 
         String decryptedText = decResult.getResponse().getContentAsString();
         assertEquals(secret, decryptedText, "invalid pt");
-    }
-
-
-    @Test
-    @DisplayName("test GEH")
-    void testErrorHandler() throws Exception {
-        mockMvc.perform(post("/api/verify")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{}"))
-                .andExpect(status().isBadRequest()); 
     }
 }

@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  mega-crypro-terminal3000:
+    build: .
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    volumes:
+      - ./storage:/app/data
+    env_file:
+      - .env
+    environment:
+      - SPRING_APPLICATION_JSON={"server.port":${APP_PORT}}
+    restart: always
