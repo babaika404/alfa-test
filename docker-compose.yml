@@ -6,8 +6,15 @@ services:
       - "${APP_PORT}:${APP_PORT}"
     volumes:
       - ./storage:/app/data
+      - sandbox:/app/downloads
     env_file:
       - .env
     environment:
       - SPRING_APPLICATION_JSON={"server.port":${APP_PORT}}
+    security_opt:
+      - no-new-privileges:true
     restart: always
+
+    
+volumes:
+  sandbox:
