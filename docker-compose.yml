@@ -6,7 +6,6 @@ services:
       - "${APP_PORT}:${APP_PORT}"
     volumes:
       - ./storage:/app/data
-      - sandbox:/app/downloads
     env_file:
       - .env
     environment:
@@ -14,7 +13,3 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: always
-
-    
-volumes:
-  sandbox:

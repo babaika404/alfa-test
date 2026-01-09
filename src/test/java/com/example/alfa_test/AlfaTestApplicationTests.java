@@ -9,16 +9,27 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "app.ks.alias=babaika",
+    "app.ks.pswd=babaika",
+    "app.ks.path=src/test/resources/testKeystore.p12", 
+    "app.download.path=target/downloads",
+    "app.download.host=raw.githubusercontent.com",
+    "app.download.ext=.png"
+})
+
 @AutoConfigureMockMvc
 class AlfaTestApplicationTests {
 
@@ -31,6 +42,7 @@ class AlfaTestApplicationTests {
     @Test
     @DisplayName("test hash")
     void testHash() throws Exception {
+
         HashRequest request = new HashRequest("babaika");
         
         MvcResult result = mockMvc.perform(post("/api/hash")
@@ -129,5 +141,26 @@ class AlfaTestApplicationTests {
 
         String decryptedText = decResult.getResponse().getContentAsString();
         assertEquals(secret, decryptedText, "invalid pt");
+    }
+
+    @Test
+    @DisplayName("test down")
+    void testDownload() throws Exception {
+        String targetUrl = "https://raw.githubusercontent.com/cR4-sh/winter-ad-training25/refs/heads/main/services/pickme-house/web/static/hellososity.png";
+
+        MvcResult result = mockMvc.perform(get("/api/download")
+                .param("url", targetUrl))
+                .andExpect(status().isOk()) 
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, org.hamcrest.Matchers.containsString("hellososity.png")))
+                .andReturn();
+
+        assertEquals(MediaType.APPLICATION_OCTET_STREAM_VALUE, result.getResponse().getContentType());
+        
+        byte[] downloadedFile = result.getResponse().getContentAsByteArray();
+        assertNotNull(downloadedFile);
+        assertTrue(downloadedFile.length > 0, "Downloaded file is empty");
+        
+        assertEquals((byte) 0x89, downloadedFile[0]);
+        assertEquals((byte) 0x50, downloadedFile[1]);
     }
 }

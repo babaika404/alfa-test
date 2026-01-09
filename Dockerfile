@@ -1,9 +1,10 @@
-FROM eclipse-temurin:25-jdk AS build
+# FROM eclipse-temurin:25-jdk AS build
+FROM bellsoft/liberica-openjdk-debian:25 AS build
 WORKDIR /app
 COPY . .
 RUN ./mvnw clean package -DskipTests
 
-FROM eclipse-temurin:25-jre
+FROM bellsoft/liberica-openjdk-debian:25
 WORKDIR /app
 
 RUN groupadd appgroup && useradd -g appgroup -s /bin/sh appuser
